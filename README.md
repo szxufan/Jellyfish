@@ -33,8 +33,8 @@ shot preparation, video generation, and export.
 
 ## 📷 Screenshots
 
-| Project overview | Asset management |
-| --- | --- |
+| Project overview                                                        | Asset management                                                                                     |
+| ----------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------- |
 | <img src="./docs/img/project.png" alt="Project overview" width="420" /> | <img src="./docs/img/%E8%B5%84%E4%BA%A7%E7%AE%A1%E7%90%86.png" alt="Asset management" width="420" /> |
 
 ## ✨ Core Value
@@ -219,7 +219,7 @@ The repository includes a ready-to-run compose setup under
 
 ```bash
 cp deploy/compose/.env.example deploy/compose/.env
-docker compose --env-file deploy/compose/.env -f deploy/compose/docker-compose.yml up --build
+docker compose --env-file deploy/compose/.env -f deploy/compose/docker-compose.yml up --build -d
 ```
 
 ## 🧑‍💻 Local Development
@@ -248,4 +248,3 @@ This project is licensed under [Apache-2.0](./LICENSE).
 ## 💬 Community & Feedback
 
 - [GitHub Issues](https://github.com/Forget-C/Jellyfish/issues)
-

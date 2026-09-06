@@ -194,7 +194,7 @@ pnpm run openapi:update
 
 ```bash
 cp deploy/compose/.env.example deploy/compose/.env
-docker compose --env-file deploy/compose/.env -f deploy/compose/docker-compose.yml up --build
+docker compose --env-file deploy/compose/.env -f deploy/compose/docker-compose.yml up --build -d
 ```
 
 ## 🧑‍💻 开发环境启动（前后端分离）

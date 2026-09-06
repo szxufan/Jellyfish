@@ -14,9 +14,13 @@ RUN pnpm run build
 
 FROM nginx:1.27-alpine AS runtime
 
-COPY deploy/docker/nginx.conf /etc/nginx/conf.d/default.conf
+# entrypoint 脚本需要 openssl CLI 生成自签证书与 htpasswd
+RUN apk add --no-cache openssl
+
+COPY deploy/docker/nginx.conf.template /etc/nginx/templates/nginx.conf.template
 COPY deploy/docker/docker-entrypoint.d/10-generate-env-js.sh /docker-entrypoint.d/10-generate-env-js.sh
-RUN chmod +x /docker-entrypoint.d/10-generate-env-js.sh
+COPY deploy/docker/docker-entrypoint.d/20-generate-certs.sh /docker-entrypoint.d/20-generate-certs.sh
+RUN chmod +x /docker-entrypoint.d/*.sh
 
 WORKDIR /usr/share/nginx/html
 COPY --from=build /app/dist/ ./
@@ -25,3 +29,4 @@ COPY --from=build /app/dist/ ./
 RUN printf 'window.__ENV = window.__ENV || {};\\n' > /usr/share/nginx/html/env.js
 
 EXPOSE 80
+EXPOSE 443

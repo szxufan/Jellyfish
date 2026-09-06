@@ -21,4 +21,9 @@ venv/
 htmlcov/
 .jellyfish.db
 jellyfish.db
-.env
+
+# 证书与私钥，防止误提交
+*.pem
+*.key
+*.crt
+*.csr

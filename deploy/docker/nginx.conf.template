@@ -1,0 +1,43 @@
+server {
+  listen 80;
+  server_name _;
+
+  root /usr/share/nginx/html;
+
+${AUTH_BASIC_LINE_1}
+${AUTH_BASIC_LINE_2}
+
+  # Ensure runtime env is not cached aggressively
+  location = /env.js {
+    add_header Cache-Control "no-store, no-cache, must-revalidate, proxy-revalidate, max-age=0";
+    try_files $uri =404;
+  }
+
+  location / {
+    try_files $uri $uri/ /index.html;
+  }
+}
+
+server {
+  listen 443 ssl;
+  http2 on;
+  server_name _;
+
+  root /usr/share/nginx/html;
+
+  ssl_certificate     ${SSL_CERT_FILE};
+  ssl_certificate_key ${SSL_KEY_FILE};
+
+${AUTH_BASIC_LINE_1}
+${AUTH_BASIC_LINE_2}
+
+  # Ensure runtime env is not cached aggressively
+  location = /env.js {
+    add_header Cache-Control "no-store, no-cache, must-revalidate, proxy-revalidate, max-age=0";
+    try_files $uri =404;
+  }
+
+  location / {
+    try_files $uri $uri/ /index.html;
+  }
+}

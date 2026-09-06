@@ -11,7 +11,11 @@ services:
     volumes:
       - mysql_data:/var/lib/mysql
     healthcheck:
-      test: ["CMD-SHELL", "mysqladmin ping -h 127.0.0.1 -uroot -p$$MYSQL_ROOT_PASSWORD --silent"]
+      test:
+        [
+          "CMD-SHELL",
+          "mysqladmin ping -h 127.0.0.1 -uroot -p$$MYSQL_ROOT_PASSWORD --silent",
+        ]
       interval: 5s
       timeout: 5s
       retries: 30
@@ -19,7 +23,12 @@ services:
   redis:
     image: redis:7
     # 启用密码认证（requirepass），避免 Redis 裸奔暴露在宿主机端口上
-    command: ["redis-server", "--requirepass", "${REDIS_PASSWORD:?REDIS_PASSWORD is required}"]
+    command:
+      [
+        "redis-server",
+        "--requirepass",
+        "${REDIS_PASSWORD:?REDIS_PASSWORD is required}",
+      ]
     environment:
       # 供 healthcheck 认证使用
       REDIS_PASSWORD: ${REDIS_PASSWORD}
@@ -27,7 +36,7 @@ services:
       - "${REDIS_PORT:-6379}:6379"
     healthcheck:
       # healthcheck 需携带密码，否则认证失败会误判为不健康
-      test: ["CMD-SHELL", "redis-cli -a \"$$REDIS_PASSWORD\" ping | grep -q PONG"]
+      test: ["CMD-SHELL", 'redis-cli -a "$$REDIS_PASSWORD" ping | grep -q PONG']
       interval: 5s
       timeout: 5s
       retries: 30
@@ -86,7 +95,7 @@ services:
       [
         "bash",
         "-lc",
-        "set -e; for f in $$(find /sql -maxdepth 1 -type f -name '*.sql' | sort); do echo \"[mysql-init-sql] applying $$f\"; mysql --default-character-set=utf8mb4 -h mysql -u\"$$MYSQL_USER\" -p\"$$MYSQL_PASSWORD\" \"$$MYSQL_DATABASE\" < \"$$f\"; done",
+        'set -e; for f in $$(find /sql -maxdepth 1 -type f -name ''*.sql'' | sort); do echo "[mysql-init-sql] applying $$f"; mysql --default-character-set=utf8mb4 -h mysql -u"$$MYSQL_USER" -p"$$MYSQL_PASSWORD" "$$MYSQL_DATABASE" < "$$f"; done',
       ]
     restart: "no"
 
@@ -154,7 +163,17 @@ services:
         condition: service_completed_successfully
       mysql-init-sql:
         condition: service_completed_successfully
-    command: ["uv", "run", "celery", "-A", "app.core.celery_app:celery_app", "worker", "-l", "info"]
+    command:
+      [
+        "uv",
+        "run",
+        "celery",
+        "-A",
+        "app.core.celery_app:celery_app",
+        "worker",
+        "-l",
+        "info",
+      ]
 
   front:
     build:
@@ -162,8 +181,16 @@ services:
       dockerfile: deploy/docker/front.Dockerfile
     environment:
       BACKEND_URL: ${BACKEND_URL}
+      # HTTPS：优先使用 FRONT_TLS_CERT/FRONT_TLS_KEY 注入的证书内容（PEM 文本）；未设置时自动生成自签证书
+      FRONT_TLS_CERT: ${FRONT_TLS_CERT:-}
+      FRONT_TLS_KEY: ${FRONT_TLS_KEY:-}
+      FRONT_TLS_CN: ${FRONT_TLS_CN:-localhost}
+      # Basic Auth：账号密码由环境变量提供；两者均设置时生效，否则容器启动失败（可用 FRONT_BASIC_AUTH=false 显式关闭）
+      FRONT_BASIC_AUTH_USER: ${FRONT_BASIC_AUTH_USER:-}
+      FRONT_BASIC_AUTH_PASSWORD: ${FRONT_BASIC_AUTH_PASSWORD:-}
+      FRONT_BASIC_AUTH: ${FRONT_BASIC_AUTH:-true}
     ports:
-      - "7788:80"
+      - "${FRONT_PORT:-7788}:443"
     depends_on:
       - backend
 

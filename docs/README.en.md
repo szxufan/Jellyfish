@@ -90,7 +90,7 @@ The repository ships a ready-to-run compose setup under `deploy/compose/`.
 
 ```bash
 cp deploy/compose/.env.example deploy/compose/.env
-docker compose --env-file deploy/compose/.env -f deploy/compose/docker-compose.yml up --build
+docker compose --env-file deploy/compose/.env -f deploy/compose/docker-compose.yml up --build -d
 ```
 
 On the first start, `backend/init_db.py` will run once to create tables (`backend-init-db` service).
