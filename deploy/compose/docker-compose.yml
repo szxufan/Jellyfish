@@ -18,10 +18,16 @@ services:
 
   redis:
     image: redis:7
+    # 启用密码认证（requirepass），避免 Redis 裸奔暴露在宿主机端口上
+    command: ["redis-server", "--requirepass", "${REDIS_PASSWORD:?REDIS_PASSWORD is required}"]
+    environment:
+      # 供 healthcheck 认证使用
+      REDIS_PASSWORD: ${REDIS_PASSWORD}
     ports:
       - "${REDIS_PORT:-6379}:6379"
     healthcheck:
-      test: ["CMD", "redis-cli", "ping"]
+      # healthcheck 需携带密码，否则认证失败会误判为不健康
+      test: ["CMD-SHELL", "redis-cli -a \"$$REDIS_PASSWORD\" ping | grep -q PONG"]
       interval: 5s
       timeout: 5s
       retries: 30
@@ -37,7 +43,8 @@ services:
       - "${RUSTFS_PORT:-9000}:9000"
       - "${RUSTFS_CONSOLE_PORT:-9001}:9001"
     volumes:
-      - rustfs_data:/data
+      # 未设置 RUSTFS_DATA_PATH 时使用命名卷 rustfs_data；设置为绝对路径时使用 bind mount（适合独立数据盘）
+      - ${RUSTFS_DATA_PATH:-rustfs_data}:/data
 
   backend-init-db:
     build:
