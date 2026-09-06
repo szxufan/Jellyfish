@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from typing import Literal, Optional
+from typing import Any, Literal, Optional
 
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
@@ -41,6 +41,33 @@ class VideoGenerationInput(BaseModel):
     )
     watermark: Optional[bool] = Field(None, description="是否包含水印，供应商/模型可能有差异")
 
+    first_frame_image: Optional[str] = Field(
+        None, description="具名键：首帧图（URL 或 data URL），供应商按能力决定是否下发"
+    )
+    last_frame_image: Optional[str] = Field(
+        None, description="具名键：尾帧图（URL 或 data URL），供应商按能力决定是否下发"
+    )
+    reference_images: Optional[list[str]] = Field(
+        None, description="具名键：参考图列表（URL 或 data URL）"
+    )
+    reference_videos: Optional[list[str]] = Field(None, description="具名键：参考视频列表（URL）")
+    reference_audios: Optional[list[str]] = Field(None, description="具名键：参考音频列表（URL）")
+    metadata: Optional[dict[str, Any]] = Field(
+        None, description="供应商私有 metadata 透传（逃生通道，键冲突时以其优先）"
+    )
+
+    def has_named_reference(self) -> bool:
+        """是否携带任一具名键参考素材（含非空列表语义）。"""
+        if _strip_optional_b64(self.first_frame_image) or _strip_optional_b64(self.last_frame_image):
+            return True
+        if self.reference_images and any(_strip_optional_b64(item) for item in self.reference_images):
+            return True
+        if self.reference_videos and any(_strip_optional_b64(item) for item in self.reference_videos):
+            return True
+        if self.reference_audios and any(_strip_optional_b64(item) for item in self.reference_audios):
+            return True
+        return False
+
     @model_validator(mode="after")
     def require_prompt_or_any_reference(self) -> "VideoGenerationInput":
         has_prompt = bool((self.prompt or "").strip())
@@ -49,6 +76,7 @@ class VideoGenerationInput(BaseModel):
                 _strip_optional_b64(self.first_frame_base64),
                 _strip_optional_b64(self.last_frame_base64),
                 _strip_optional_b64(self.key_frame_base64),
+                self.has_named_reference(),
             ]
         )
         if not has_prompt and not has_ref:
