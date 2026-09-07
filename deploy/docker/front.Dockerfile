@@ -17,7 +17,8 @@ FROM nginx:1.27-alpine AS runtime
 # entrypoint 脚本需要 openssl CLI 生成自签证书与 htpasswd
 RUN apk add --no-cache openssl
 
-COPY deploy/docker/nginx.conf.template /etc/nginx/templates/nginx.conf.template
+# 模板放 site-templates/，避开官方 20-envsubst-on-templates.sh 扫描的 templates/（会渲染出坏配置）
+COPY deploy/docker/nginx.conf.template /etc/nginx/site-templates/nginx.conf.template
 COPY deploy/docker/docker-entrypoint.d/10-generate-env-js.sh /docker-entrypoint.d/10-generate-env-js.sh
 COPY deploy/docker/docker-entrypoint.d/20-generate-certs.sh /docker-entrypoint.d/20-generate-certs.sh
 RUN chmod +x /docker-entrypoint.d/*.sh

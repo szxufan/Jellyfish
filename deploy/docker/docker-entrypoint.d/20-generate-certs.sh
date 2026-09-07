@@ -47,6 +47,20 @@ else
 fi
 
 # 3) 渲染 nginx 配置：无认证时两个占位行渲染为空行，有认证时为 auth_basic / auth_basic_user_file 指令
+# 模板放在 /etc/nginx/site-templates/（避开官方 20-envsubst-on-templates.sh 扫描的
+# /etc/nginx/templates/，否则会被 envsubst 先渲染出含未替换占位符的坏配置）。
+TEMPLATE_DIR="/etc/nginx/site-templates"
+mkdir -p "${TEMPLATE_DIR}"
+if [ -f "${TEMPLATE_DIR}/nginx.conf.template" ]; then
+  :
+elif [ -f "/etc/nginx/templates/nginx.conf.template" ]; then
+  # 兼容旧镜像布局
+  cp /etc/nginx/templates/nginx.conf.template "${TEMPLATE_DIR}/nginx.conf.template"
+else
+  echo "[entrypoint] ERROR: nginx.conf.template not found in ${TEMPLATE_DIR}" >&2
+  exit 1
+fi
+
 if [ -n "${HTPASSWD_FILE:-}" ] && [ -f "${HTPASSWD_FILE}" ]; then
   AUTH_BASIC_LINE_1='  auth_basic "Restricted";'
   AUTH_BASIC_LINE_2="  auth_basic_user_file ${HTPASSWD_FILE};"
@@ -60,4 +74,4 @@ sed \
   -e "s|\${AUTH_BASIC_LINE_2}|${AUTH_BASIC_LINE_2}|" \
   -e "s|\${SSL_CERT_FILE}|${CERT_FILE}|g" \
   -e "s|\${SSL_KEY_FILE}|${KEY_FILE}|g" \
-  /etc/nginx/templates/nginx.conf.template > /etc/nginx/conf.d/default.conf
+  "${TEMPLATE_DIR}/nginx.conf.template" > /etc/nginx/conf.d/default.conf
