@@ -33,12 +33,12 @@ docker compose --env-file deploy/compose/.env -f deploy/compose/docker-compose.y
 
 front 容器通过 Nginx 以 HTTPS（443）对外提供服务，宿主机默认 `7788 -> 443`，并启用 HTTP Basic Auth（账号密码来自 `.env`）：
 
-- 证书：默认自动生成自签证书（`FRONT_TLS_CN` 可指定域名/IP）；如需使用自有证书，通过 `FRONT_TLS_CERT` / `FRONT_TLS_KEY` 提供，支持两种写法：
-    - 直接填 PEM 文本内容（含 `BEGIN/END` 行，单行变量）。
-    - 填**容器内**可读的文件路径：需先在 `docker-compose.yml` 的 `front` 服务挂载证书目录（如 `- /home/user/mylinkpi.cn:/certs:ro`），再设置 `FRONT_TLS_CERT=/certs/mylinkpi.cn.pem`、`FRONT_TLS_KEY=/certs/mylinkpi.cn.key`。注意不能直接填宿主机路径——容器内看不到宿主机文件系统，未挂载时脚本会启动失败并给出明确报错。
-    - 脚本会自动校验 PEM 合法性及证书/私钥配对，不匹配时启动失败。
+- 证书：必须提供自有证书。`.env` 中 `FRONT_TLS_CERT` / `FRONT_TLS_KEY` 填**宿主机上**证书与私钥文件的路径（如 `/home/user/mylinkpi.cn/mylinkpi.cn.pem` 与对应 `.key`），compose 会自动把这两个文件挂载进容器（nginx 固定读取 `/etc/nginx/certs/tls.crt` / `tls.key`）。
+    - 二者必须同时提供，否则 compose 直接报错退出。
+    - entrypoint 启动时校验 PEM 合法性与证书/私钥配对，不合法时容器启动失败并给出明确报错。
+    - 证书更新后，重启 front 容器即可生效（单文件 bind mount）。
 - 密码保护：`FRONT_BASIC_AUTH_USER` / `FRONT_BASIC_AUTH_PASSWORD` 均设置后生效；如确实不需要保护，可显式设置 `FRONT_BASIC_AUTH=false`（不推荐）。
-- 访问方式：`https://localhost:7788`（自签证书浏览器会告警，属预期现象）。
+- 访问方式：`https://localhost:7788`（证书与 `server_name` 不匹配时浏览器会告警，属预期现象）。
 - 注意：浏览器经 HTTPS 访问前端后，若 `BACKEND_URL` 仍为 `http://`，请求会被拦截为 Mixed Content，需将后端改为 HTTPS 或将 API 反代到前端同源。
 
 ## 数据存储路径
@@ -53,7 +53,7 @@ RUSTFS_DATA_PATH=/data/jellyfish/rustfs
 
 ## 默认访问地址
 
-- 前端：`https://localhost:7788`（Basic Auth + 自签证书）
+- 前端：`https://localhost:7788`（Basic Auth + 自有 TLS 证书）
 - 后端：`http://localhost:8000`
 - RustFS Console：`http://localhost:9001`
 

@@ -182,14 +182,19 @@ services:
       dockerfile: deploy/docker/front.Dockerfile
     environment:
       BACKEND_URL: ${BACKEND_URL}
-      # HTTPS：优先使用 FRONT_TLS_CERT/FRONT_TLS_KEY 注入的证书内容（PEM 文本）；未设置时自动生成自签证书
-      FRONT_TLS_CERT: ${FRONT_TLS_CERT:-}
-      FRONT_TLS_KEY: ${FRONT_TLS_KEY:-}
-      FRONT_TLS_CN: ${FRONT_TLS_CN:-localhost}
+      # HTTPS：FRONT_TLS_CERT / FRONT_TLS_KEY 填宿主机上证书与私钥文件路径（二者必须同时提供），
+      # compose 将这两个文件按原路径 bind mount 进容器（容器内固定为 /etc/nginx/certs/tls.crt|tls.key），
+      # entrypoint 脚本会校验 PEM 合法性与证书/私钥配对，不合法时容器启动失败。
+      FRONT_TLS_CERT: ${FRONT_TLS_CERT:?FRONT_TLS_CERT is required (host path to PEM certificate)}
+      FRONT_TLS_KEY: ${FRONT_TLS_KEY:?FRONT_TLS_KEY is required (host path to PEM private key)}
       # Basic Auth：账号密码由环境变量提供；两者均设置时生效，否则容器启动失败（可用 FRONT_BASIC_AUTH=false 显式关闭）
       FRONT_BASIC_AUTH_USER: ${FRONT_BASIC_AUTH_USER:-}
       FRONT_BASIC_AUTH_PASSWORD: ${FRONT_BASIC_AUTH_PASSWORD:-}
       FRONT_BASIC_AUTH: ${FRONT_BASIC_AUTH:-true}
+    volumes:
+      # 把 .env 中路径指向的宿主机证书/私钥直接挂到 nginx 固定读取位置（单文件 bind mount，宿主机文件更新后重启容器即生效）
+      - ${FRONT_TLS_CERT}:/etc/nginx/certs/tls.crt:ro
+      - ${FRONT_TLS_KEY}:/etc/nginx/certs/tls.key:ro
     ports:
       - "${FRONT_PORT:-7788}:443"
     depends_on:

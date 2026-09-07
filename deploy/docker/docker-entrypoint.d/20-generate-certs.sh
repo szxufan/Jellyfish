@@ -1,9 +1,10 @@
 #!/usr/bin/env sh
-# 功能：容器启动前按环境变量生成 HTTPS 证书与 Basic Auth 配置，并渲染 nginx 配置。
+# 功能：容器启动前将 FRONT_TLS_CERT / FRONT_TLS_KEY 指定的证书与私钥装配到 nginx 可读位置，
+#       并按环境变量生成 Basic Auth 配置、渲染 nginx 站点配置。
 # 说明：
-# - FRONT_TLS_CERT / FRONT_TLS_KEY：证书与私钥（PEM），二者必须同时提供，写入 /etc/nginx/certs/。
-#   支持两种写法（二者一致即可）：直接填 PEM 文本内容（含 BEGIN/END 行），或填宿主机文件路径
-#   （如 /home/user/cert.pem，注意该路径需挂载进容器可读，否则按内容处理会导致 nginx 启动失败）。
+# - FRONT_TLS_CERT / FRONT_TLS_KEY：宿主机上证书与私钥文件路径（如 /home/user/certs/site.pem），
+#   二者必须同时提供；文件由 compose 按同一 HOST 路径 bind mount 进容器，容器内固定为
+#   /etc/nginx/certs/tls.crt 与 /etc/nginx/certs/tls.key（映射关系见 docker-compose.yml）。
 # - FRONT_BASIC_AUTH_USER / FRONT_BASIC_AUTH_PASSWORD：Basic Auth 账号密码，生成 /etc/nginx/auth/htpasswd。
 # - 未启用 Basic Auth 时容器直接退出（FRONT_BASIC_AUTH 为 fail-fast 防误用开关）。
 # - 配置由 nginx.conf.template 渲染：AUTH_BASIC_LINES 在无认证时为空，有认证时为两条 auth_basic 指令。
@@ -15,68 +16,37 @@ CERT_FILE="${CERT_DIR}/tls.crt"
 KEY_FILE="${CERT_DIR}/tls.key"
 HTPASSWD_FILE="${AUTH_DIR}/htpasswd"
 
-# resolve_tls_input：把 FRONT_TLS_CERT / FRONT_TLS_KEY 的值解析为 PEM 文本。
-# 参数：$1 = 变量值；$2 = 变量名（用于报错提示）。
-# 规则：若值以 / 开头且对应文件存在且可读，则读取文件内容；否则原样视为 PEM 文本。
-# 返回：将 PEM 文本写入全局变量 TLS_INPUT；文件不可读时以明确错误退出，避免生成坏证书。
-resolve_tls_input() {
-  _value="$1"
-  _name="$2"
-  case "$_value" in
-    /*)
-      if [ -f "$_value" ] && [ -r "$_value" ]; then
-        TLS_INPUT="$(cat "$_value")"
-      else
-        echo "[entrypoint] ERROR: ${_name} looks like a path but file not found/readable: ${_value}" >&2
-        echo "[entrypoint] HINT: mount the cert/key file into the container, or paste PEM content instead." >&2
-        exit 1
-      fi
-      ;;
-    *)
-      TLS_INPUT="$_value"
-      ;;
-  esac
-}
-
 mkdir -p "${CERT_DIR}" "${AUTH_DIR}"
 
-# 1) TLS 证书：由环境变量注入（PEM 文本或文件路径），或使用 openssl 生成的自签证书
-if [ -n "${FRONT_TLS_CERT:-}" ] && [ -n "${FRONT_TLS_KEY:-}" ]; then
-  echo "[entrypoint] Using TLS cert/key from FRONT_TLS_CERT / FRONT_TLS_KEY"
-  resolve_tls_input "${FRONT_TLS_CERT}" "FRONT_TLS_CERT"
-  printf '%s\n' "${TLS_INPUT}" > "${CERT_FILE}"
-  resolve_tls_input "${FRONT_TLS_KEY}" "FRONT_TLS_KEY"
-  printf '%s\n' "${TLS_INPUT}" > "${KEY_FILE}"
-  chmod 600 "${KEY_FILE}"
-  # fail-fast：内容非法时立即退出，避免 nginx 启动阶段才报出难排查的 PEM 错误
-  if ! openssl x509 -in "${CERT_FILE}" -noout >/dev/null 2>&1; then
-    echo "[entrypoint] ERROR: FRONT_TLS_CERT is not a valid PEM certificate (path unreadable or wrong content)." >&2
-    exit 1
-  fi
-  if ! openssl pkey -in "${KEY_FILE}" -noout >/dev/null 2>&1; then
-    echo "[entrypoint] ERROR: FRONT_TLS_KEY is not a valid PEM private key (path unreadable or wrong content)." >&2
-    exit 1
-  fi
-  # 证书与私钥配对校验：比较两者导出的公钥 DER（POSIX 写法，busybox ash 无进程替换）
-  _cert_pub="$(mktemp)"
-  _key_pub="$(mktemp)"
-  openssl x509 -in "${CERT_FILE}" -noout -pubkey 2>/dev/null \
-    | openssl pkey -pubin -outform DER > "${_cert_pub}" 2>/dev/null || true
-  openssl pkey -in "${KEY_FILE}" -pubout -outform DER > "${_key_pub}" 2>/dev/null || true
-  if ! cmp -s "${_cert_pub}" "${_key_pub}"; then
-    rm -f "${_cert_pub}" "${_key_pub}"
-    echo "[entrypoint] ERROR: FRONT_TLS_CERT and FRONT_TLS_KEY do not match (different key pair)." >&2
-    exit 1
-  fi
-  rm -f "${_cert_pub}" "${_key_pub}"
-else
-  echo "[entrypoint] FRONT_TLS_CERT/FRONT_TLS_KEY not set, generating self-signed certificate"
-  FRONT_TLS_CN="${FRONT_TLS_CN:-localhost}"
-  openssl req -x509 -nodes -newkey rsa:2048 -days 3650 \
-    -keyout "${KEY_FILE}" -out "${CERT_FILE}" \
-    -subj "/CN=${FRONT_TLS_CN}" \
-    -addext "subjectAltName=DNS:${FRONT_TLS_CN},DNS:localhost,IP:127.0.0.1"
+# 1) TLS 证书：从容器内固定路径校验并装配（fail-fast，避免 nginx 启动阶段才暴露 PEM 错误）
+if [ ! -s "${CERT_FILE}" ] || [ ! -s "${KEY_FILE}" ]; then
+  echo "[entrypoint] ERROR: ${CERT_FILE} / ${KEY_FILE} missing or empty." >&2
+  echo "[entrypoint] HINT: set FRONT_TLS_CERT/FRONT_TLS_KEY in .env to host cert/key file paths." >&2
+  echo "[entrypoint] HINT: compose bind-mounts those files into the container; see deploy/compose/docker-compose.yml." >&2
+  exit 1
 fi
+chmod 600 "${KEY_FILE}" 2>/dev/null || true
+# PEM 合法性与证书/私钥配对校验（POSIX 写法，busybox ash 无进程替换）
+if ! openssl x509 -in "${CERT_FILE}" -noout >/dev/null 2>&1; then
+  echo "[entrypoint] ERROR: ${CERT_FILE} is not a valid PEM certificate." >&2
+  exit 1
+fi
+if ! openssl pkey -in "${KEY_FILE}" -noout >/dev/null 2>&1; then
+  echo "[entrypoint] ERROR: ${KEY_FILE} is not a valid PEM private key." >&2
+  exit 1
+fi
+_cert_pub="$(mktemp)"
+_key_pub="$(mktemp)"
+openssl x509 -in "${CERT_FILE}" -noout -pubkey 2>/dev/null \
+  | openssl pkey -pubin -outform DER > "${_cert_pub}" 2>/dev/null || true
+openssl pkey -in "${KEY_FILE}" -pubout -outform DER > "${_key_pub}" 2>/dev/null || true
+if ! cmp -s "${_cert_pub}" "${_key_pub}"; then
+  rm -f "${_cert_pub}" "${_key_pub}"
+  echo "[entrypoint] ERROR: certificate and private key do not match (different key pair)." >&2
+  exit 1
+fi
+rm -f "${_cert_pub}" "${_key_pub}"
+echo "[entrypoint] TLS cert/key validated: ${CERT_FILE}"
 
 # 2) Basic Auth：账号密码由环境变量提供；未配置时拒绝启动，避免误以为有密码保护
 if [ -n "${FRONT_BASIC_AUTH_USER:-}" ] && [ -n "${FRONT_BASIC_AUTH_PASSWORD:-}" ]; then

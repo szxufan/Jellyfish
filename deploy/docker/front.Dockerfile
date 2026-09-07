@@ -14,7 +14,7 @@ RUN pnpm run build
 
 FROM nginx:1.27-alpine AS runtime
 
-# entrypoint 脚本需要 openssl CLI 生成自签证书与 htpasswd
+# entrypoint 脚本需要 openssl CLI 生成 htpasswd 并校验 PEM 证书/私钥
 RUN apk add --no-cache openssl
 
 # 模板放 site-templates/，避开官方 20-envsubst-on-templates.sh 扫描的 templates/（会渲染出坏配置）
