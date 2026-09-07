@@ -1,0 +1,31 @@
+# Docker build context 忽略清单。
+# compose 中 4 个服务的 build context 均为仓库根（../..），此文件用于避免把
+# 大体积/无关内容（venv、构建产物、文档站、版本库等）打进 context，
+# 否则每次 docker compose up 触发构建时都要全量传输与校验 context，
+# 表现为 backend-init-db 等服务 ready 明显变慢（即使层缓存命中也无法避免）。
+
+# Python 虚拟环境与缓存（backend/.venv 约 188M，是 context 体积的大头）
+**/.venv
+**/__pycache__
+**/*.pyc
+
+# 前端依赖与构建产物
+front/node_modules
+front/dist
+
+# 版本库与工具目录
+.git
+**/.pytest_cache
+**/.mypy_cache
+**/.ruff_cache
+
+# 文档与站点（不参与任何镜像构建）
+site
+docs
+*.md
+!backend/README.md
+
+# IDE / 本地环境文件
+.vscode
+.idea
+.env
