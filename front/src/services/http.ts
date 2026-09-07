@@ -1,6 +1,8 @@
 import axios, { AxiosInstance, AxiosRequestConfig, AxiosResponse } from 'axios'
 
-const backendBaseUrl = import.meta.env.VITE_BACKEND_URL ?? 'http://localhost:8000'
+// 默认同源 `/api`（生产由 nginx 反代到后端；本地开发由 Vite proxy 转发）。
+// 仅当显式设置 VITE_BACKEND_URL 时才直连后端。
+const backendBaseUrl = import.meta.env.VITE_BACKEND_URL ?? ''
 const baseURL = import.meta.env.VITE_API_BASE_URL ?? `${backendBaseUrl}/api`
 
 const http: AxiosInstance = axios.create({

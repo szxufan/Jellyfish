@@ -29,11 +29,13 @@ export function resolveAssetUrl(value?: string | null): string | undefined {
   }
 
   try {
+    // 同源优先：OpenAPI.BASE 为空串时 new URL(path, location.origin) 走站点自身，
+    // 由 nginx 把 /api 反代到后端；仅直连部署时才通过 env 拿到完整后端地址。
     const fallbackBase =
-      window.__ENV?.BACKEND_URL ||
-      import.meta.env.VITE_BACKEND_URL ||
       import.meta.env.VITE_API_BASE_URL ||
-      'http://localhost:8000'
+      import.meta.env.VITE_BACKEND_URL ||
+      window.__ENV?.BACKEND_URL ||
+      window.location.origin
     return new URL(trimmed, OpenAPI.BASE || fallbackBase).toString()
   } catch {
     return trimmed

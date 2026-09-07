@@ -27,12 +27,13 @@ docker compose --env-file deploy/compose/.env -f deploy/compose/docker-compose.y
 - `REDIS_PASSWORD`（必填，未设置时 Redis 服务会启动失败）
 - `FRONT_BASIC_AUTH_PASSWORD`（前端 HTTPS 站点的 Basic Auth 密码，配合 `FRONT_BASIC_AUTH_USER` 使用；两者缺一时 front 容器会启动失败）
 
-若虚拟机有公网访问，还需用防火墙/安全组将 3306（MySQL）、6379（Redis）、9000/9001（RustFS）限制为仅内网访问，仅放行 22、7788、8000。
+若虚拟机有公网访问，还需用防火墙/安全组将 3306（MySQL）、6379（Redis）、9000/9001（RustFS）限制为仅内网访问，仅放行 22、7788。后端 8000 端口默认不向宿主机暴露（API 统一经前端 7788 的 `/api` 反代访问），无需放行。
 
 ## 前端 HTTPS 与密码保护
 
 front 容器通过 Nginx 以 HTTPS（443）对外提供服务，宿主机默认 `7788 -> 443`，并启用 HTTP Basic Auth（账号密码来自 `.env`）：
 
+- API 同源反代：浏览器所有接口请求走 `https://<host>:7788/api/...`，由 nginx 转发到 backend 容器（容器内 `http://backend:8000`），因此没有 Mixed Content / CORS 问题，`BACKEND_URL` 默认无需设置（仅直连后端部署时才设置）。
 - 证书：必须提供自有证书。`.env` 中 `FRONT_TLS_CERT` / `FRONT_TLS_KEY` 填**宿主机上**证书与私钥文件的路径（如 `/home/user/mylinkpi.cn/mylinkpi.cn.pem` 与对应 `.key`），compose 会自动把这两个文件挂载进容器（nginx 固定读取 `/etc/nginx/certs/tls.crt` / `tls.key`）。
     - 二者必须同时提供，否则 compose 直接报错退出。
     - entrypoint 启动时校验 PEM 合法性与证书/私钥配对，不合法时容器启动失败并给出明确报错。
@@ -53,8 +54,8 @@ RUSTFS_DATA_PATH=/data/jellyfish/rustfs
 
 ## 默认访问地址
 
-- 前端：`https://localhost:7788`（Basic Auth + 自有 TLS 证书）
-- 后端：`http://localhost:8000`
+- 前端：`https://localhost:7788`（Basic Auth + 自有 TLS 证书，API 经同源 `/api` 反代）
+- 后端：不直接对外暴露（容器内 8000，经前端反代访问；如需直连调试可临时放开 ports）
 - RustFS Console：`http://localhost:9001`
 
 ## 说明
