@@ -32,5 +32,17 @@ def bootstrap_builtin_providers() -> None:
                 supported_categories=(ModelCategoryKey.text,),
                 default_base_url="https://dashscope.aliyuncs.com/compatible-mode/v1",
             ),
+            ProviderSpec(
+                key="ljp_api",
+                display_name="连接派",
+                aliases=("连接派", "ljp-api", "ljp_api", "ljpapi", "ljp api"),
+                supported_categories=(
+                    ModelCategoryKey.text,
+                    ModelCategoryKey.image,
+                    ModelCategoryKey.video,
+                ),
+                # 纯网关型供应商：无官方默认端点，创建 Provider 时必须显式填写 base_url。
+                default_base_url=None,
+            ),
         ]
     )

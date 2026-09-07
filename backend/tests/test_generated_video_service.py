@@ -103,6 +103,7 @@ def test_resolve_provider_key_from_name_supports_known_aliases() -> None:
     assert resolve_provider_key_from_name("OpenAI") == "openai"
     assert resolve_provider_key_from_name("火山引擎") == "volcengine"
     assert resolve_provider_key_from_name("Doubao Video") == "volcengine"
+    assert resolve_provider_key_from_name("连接派") == "ljp_api"
 
 
 @pytest.mark.asyncio
@@ -215,8 +216,46 @@ async def test_build_run_args_maps_reference_images(monkeypatch: pytest.MonkeyPa
         assert run_args["input"]["first_frame_base64"] == "data:image/png;base64,img-first"
         assert run_args["input"]["last_frame_base64"] == "data:image/png;base64,img-last"
         assert run_args["input"]["key_frame_base64"] is None
+        assert run_args["input"]["first_frame_image"] == "data:image/png;base64,img-first"
+        assert run_args["input"]["last_frame_image"] == "data:image/png;base64,img-last"
         assert run_args["input"]["ratio"] == "9:16"
         assert run_args["input"]["seconds"] == 6
+    await engine.dispose()
+
+
+@pytest.mark.asyncio
+async def test_build_run_args_maps_named_keys_for_ljp_api(monkeypatch: pytest.MonkeyPatch) -> None:
+    """ljp_api provider 下 build_run_args 应携带具名键，openai/volcengine payload 不读取、零影响。"""
+    db, engine = await _build_session()
+    async with db:
+        await _seed_shot_graph(db)
+        provider = Provider(id="p1", name="连接派", base_url="https://gw.example.com/v1", api_key="k")
+        model = Model(id="m_video", name="viduq2", category=ModelCategoryKey.video, provider_id="p1")
+        settings = ModelSettings(id=1, default_video_model_id="m_video")
+        db.add_all([provider, model, settings])
+        await db.commit()
+
+        async def _fake_file_id_to_data_url(_db: AsyncSession, *, file_id: str) -> str:
+            return f"data:image/png;base64,{file_id}"
+
+        monkeypatch.setattr(
+            "app.services.film.generated_video.file_id_to_data_url",
+            _fake_file_id_to_data_url,
+        )
+
+        run_args = await build_run_args(
+            db,
+            shot_id="s1",
+            reference_mode="first_last",
+            prompt="最终视频提示词",
+            images=["img-first", "img-last"],
+            ratio="16:9",
+        )
+
+        assert run_args["provider"] == "ljp_api"
+        assert run_args["base_url"] == "https://gw.example.com/v1"
+        assert run_args["input"]["first_frame_image"] == "data:image/png;base64,img-first"
+        assert run_args["input"]["last_frame_image"] == "data:image/png;base64,img-last"
     await engine.dispose()
 
 

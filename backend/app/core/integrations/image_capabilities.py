@@ -39,8 +39,11 @@ def register_image_model_capability(
     model_prefix: str,
     capability: ImageModelCapability,
 ) -> None:
-    """兼容入口：注册模型能力覆盖（按前缀匹配，大小写不敏感）。"""
-    if provider == "openai":
+    """兼容入口：注册模型能力覆盖（按前缀匹配，大小写不敏感）。
+
+    ljp_api 图片为标准 OpenAI 兼容实现（复用 openai 适配器执行），能力声明共用 openai。
+    """
+    if provider in ("openai", "ljp_api"):
         from app.core.integrations.openai.image_capabilities import register_openai_image_capability
 
         register_openai_image_capability(model_prefix=model_prefix, capability=capability)
@@ -59,14 +62,15 @@ def clear_image_model_capability_overrides(*, provider: ProviderKey | None = Non
         clear_openai_image_capability_overrides()
         clear_volcengine_image_capability_overrides()
         return
-    if provider == "openai":
+    if provider in ("openai", "ljp_api"):
+        # ljp_api 与 openai 共用能力存储，清空 openai 即同时清空两者。
         clear_openai_image_capability_overrides()
         return
     clear_volcengine_image_capability_overrides()
 
 
 def resolve_image_capability(*, provider: ProviderKey, model: str | None) -> ImageModelCapability:
-    if provider == "openai":
+    if provider in ("openai", "ljp_api"):
         from app.core.integrations.openai.image_capabilities import resolve_openai_image_capability
 
         return resolve_openai_image_capability(model)

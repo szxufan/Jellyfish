@@ -184,6 +184,10 @@ async def build_run_args(
             "first_frame_base64": frame_map.get(ShotFrameType.first),
             "last_frame_base64": frame_map.get(ShotFrameType.last),
             "key_frame_base64": frame_map.get(ShotFrameType.key),
+            # 具名键（URL/data URL）：ljp-api 走统一素材具名键语义；
+            # openai / volcengine payload 不读取这些字段，行为零变化。
+            "first_frame_image": frame_map.get(ShotFrameType.first),
+            "last_frame_image": frame_map.get(ShotFrameType.last),
             "model": model.name,
             "ratio": resolved_ratio,
             "seconds": shot_detail.duration,
@@ -209,7 +213,8 @@ async def persist_generated_video_to_shot(
         raise RuntimeError("Video generation result has no download url")
 
     url_headers: dict[str, str] | None = None
-    if provider == "openai":
+    if provider in ("openai", "ljp_api"):
+        # ljp-api 网关的 content 代理端点与 OpenAI 一样需要 Bearer 鉴权。
         url_headers = {"Authorization": f"Bearer {api_key}"}
 
     file_obj = await create_file_from_url_or_b64(

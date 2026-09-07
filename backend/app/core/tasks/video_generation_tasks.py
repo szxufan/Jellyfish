@@ -11,6 +11,7 @@ from typing import Any, AsyncIterator
 
 from app.core.integrations.openai.video import OpenAIVideoApiAdapter
 from app.core.integrations.volcengine.video import VolcengineVideoApiAdapter
+from app.core.integrations.ljp_api.video import LjpApiVideoApiAdapter
 from app.core.contracts.provider import ProviderConfig
 from app.core.tasks.registry import resolve_task_adapter
 from app.core.contracts.video_generation import VideoGenerationInput, VideoGenerationResult
@@ -22,6 +23,7 @@ __all__ = [
     "AbstractVideoGenerationTask",
     "OpenAIVideoGenerationTask",
     "VolcengineVideoGenerationTask",
+    "LjpApiVideoGenerationTask",
     "VideoGenerationTask",
 ]
 
@@ -206,6 +208,65 @@ class VolcengineVideoGenerationTask(AbstractVideoGenerationTask):
         )
 
 
+class LjpApiVideoGenerationTask(AbstractVideoGenerationTask):
+    """ljp-api 网关视频任务：OpenAI 风格生命周期 + 网关错误体解析。"""
+
+    def __init__(
+        self,
+        *,
+        adapter: LjpApiVideoApiAdapter | None = None,
+        provider_config: ProviderConfig,
+        input_: VideoGenerationInput,
+        poll_interval_s: float = 2.0,
+        timeout_s: float = 120.0,
+    ) -> None:
+        super().__init__(
+            provider_config=provider_config,
+            input_=input_,
+            poll_interval_s=poll_interval_s,
+            timeout_s=timeout_s,
+        )
+        self._adapter = adapter or LjpApiVideoApiAdapter()
+
+    async def _create_task(self) -> None:
+        self._provider_task_id = await self._adapter.create_video(
+            cfg=self._cfg,
+            input_=self._input,
+            timeout_s=self._timeout_s,
+        )
+
+    async def _poll_and_get_result(self) -> VideoGenerationResult:
+        video_id = self._provider_task_id or ""
+        if not video_id:
+            raise RuntimeError("ljp-api poll missing provider task id")
+
+        base_url = (self._cfg.base_url or "").strip().rstrip("/")
+        if not base_url:
+            raise RuntimeError("ljp-api base_url is required: configure Provider.base_url first")
+        status_val = ""
+        while True:
+            meta = await self._adapter.get_video(
+                cfg=self._cfg,
+                video_id=video_id,
+                timeout_s=self._timeout_s,
+            )
+            status_val = str(meta.get("status") or "")
+            if status_val in ("completed", "failed"):
+                if status_val == "failed":
+                    raise RuntimeError(f"ljp-api video failed: {meta.get('error')!r}")
+                break
+            await self._sleep_poll()
+
+        # 网关 content 代理端点需 Bearer 鉴权，落库侧会按 provider 附加请求头。
+        return VideoGenerationResult(
+            url=f"{base_url}/videos/{video_id}/content",
+            file_id=None,
+            provider_task_id=video_id,
+            provider="ljp_api",
+            status=status_val or "completed",
+        )
+
+
 class VideoGenerationTask(BaseTask):
     """按 provider 分派到 OpenAI / 火山实现；对外构造函数签名保持不变。"""
 
@@ -252,6 +313,21 @@ class VideoGenerationTask(BaseTask):
         timeout_s: float = 120.0,
     ) -> AbstractVideoGenerationTask:
         return VolcengineVideoGenerationTask(
+            provider_config=provider_config,
+            input_=input_,
+            poll_interval_s=poll_interval_s,
+            timeout_s=timeout_s,
+        )
+
+    @staticmethod
+    def _build_ljp_api_impl(
+        *,
+        provider_config: ProviderConfig,
+        input_: VideoGenerationInput,
+        poll_interval_s: float = 2.0,
+        timeout_s: float = 120.0,
+    ) -> AbstractVideoGenerationTask:
+        return LjpApiVideoGenerationTask(
             provider_config=provider_config,
             input_=input_,
             poll_interval_s=poll_interval_s,

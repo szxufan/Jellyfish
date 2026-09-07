@@ -79,6 +79,20 @@ description: "如何在代码中注册内置供应商能力，并与异步任务
 - video：`video_base_url` > `base_url` > `ProviderSpec.default_base_url`
 - text：`base_url` > `ProviderSpec.default_base_url`
 
+## 内置供应商：ljp_api（连接派）
+
+`ljp_api`（显示名「连接派」，别名含 `连接派` / `ljp-api`）已按上述流程完成接线，特点：
+
+- **能力类别**：text / image / video 三类全支持；`default_base_url` 为空，创建 Provider 时必须显式填写 base_url。
+- **文本与图片**：均为标准 OpenAI 兼容接口，无专属实现——文本走 `ChatOpenAI` 链路，图片直接注册复用 `ImageGenerationTask._build_openai_impl`（`TASK_ADAPTER_SPECS` 中可见）。
+- **视频**：独立适配器 `app/core/integrations/ljp_api/video.py` + `LjpApiVideoGenerationTask`，对接网关 `POST /videos` 与 `GET /videos/{task_id}`（OpenAI 风格生命周期）。差异点：
+  - 请求体支持统一素材具名键（`metadata.first_frame_image` / `last_frame_image` / `reference_images` / `reference_videos` / `reference_audios`）与 vidu 的 `metadata.action`（白名单校验 + 按素材组合自动推导）。
+  - 错误体为 `{code, message, data}`，适配器会解析进异常消息（如 `ljp-api error invalid_action: ...`）。
+  - 结果 URL 为网关 content 代理端点，落库下载时会附加 Bearer 头（与 openai 同一分支）。
+- **业务接入**：`build_run_args` 已统一填充 `first_frame_image` / `last_frame_image` 具名键；openai / volcengine 的 payload 不读取这些字段，行为零变化。
+- **能力声明**：视频能力分派在 `video_capabilities.py` 中有独立 `ljp_api` 分支；图片能力与 openai 共用（复用其实现）。
+- **测试**：`backend/tests/core/integrations/test_ljp_api_video_adapters.py`（MockTransport 单测），注册与业务层断言分布在 `test_task_registry.py`、`test_llm_api_responses.py`、`test_generated_video_service.py`。
+
 ## 测试提示
 
 完整 `app.main` 会加载含 Celery 依赖的路由链。仅验证 LLM 路由行为时，可使用测试辅助模块 `backend/tests/support/llm_api_app.py` 构建只挂载 `/api/v1/llm` 的应用，避免轻量环境缺少可选依赖导致导入失败。
