@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { Alert, Card, Form, Select, InputNumber, Button, message } from 'antd'
+import { Alert, Card, Form, Select, Button, message } from 'antd'
 import { LlmService } from '../../../services/generated/services/LlmService'
 import type { ModelRead, ModelSettingsRead } from '../../../services/generated'
 
@@ -36,7 +36,6 @@ export default function SettingsTab() {
         default_text_model_id: settings.default_text_model_id,
         default_image_model_id: settings.default_image_model_id,
         default_video_model_id: settings.default_video_model_id,
-        api_timeout: settings.api_timeout,
         log_level: settings.log_level,
       })
     }
@@ -51,7 +50,6 @@ export default function SettingsTab() {
           default_text_model_id: values.default_text_model_id,
           default_image_model_id: values.default_image_model_id,
           default_video_model_id: values.default_video_model_id,
-          api_timeout: values.api_timeout,
           log_level: values.log_level,
         },
       })
@@ -98,9 +96,6 @@ export default function SettingsTab() {
               placeholder="选择模型"
               options={videoModels.map((m) => ({ label: m.name, value: m.id }))}
             />
-          </Form.Item>
-          <Form.Item name="api_timeout" label="API 超时（秒）">
-            <InputNumber min={5} max={300} className="w-full" />
           </Form.Item>
           <Form.Item name="log_level" label="日志级别">
             <Select

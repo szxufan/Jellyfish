@@ -20,10 +20,6 @@ export type ModelSettingsRead = {
      */
     default_video_model_id?: (string | null);
     /**
-     * API 超时（秒）
-     */
-    api_timeout?: number;
-    /**
      * 日志级别
      */
     log_level?: LogLevel;

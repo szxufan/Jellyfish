@@ -99,14 +99,13 @@ async def test_update_model_settings_persists_latest_values() -> None:
     async with db:
         updated = await update_model_settings(
             db,
-            body=ModelSettingsUpdate(api_timeout=45, log_level=LogLevel.debug),
+            body=ModelSettingsUpdate(log_level=LogLevel.debug),
         )
 
         stored = await db.get(ModelSettings, 1)
         assert updated.id == 1
-        assert updated.api_timeout == 45
         assert updated.log_level == LogLevel.debug
-        assert stored is not None and stored.api_timeout == 45
+        assert stored is not None and stored.log_level == LogLevel.debug
     await engine.dispose()
 
 

@@ -91,6 +91,7 @@ description: "如何在代码中注册内置供应商能力，并与异步任务
   - 结果 URL 为网关 content 代理端点，落库下载时会附加 Bearer 头（与 openai 同一分支）。
 - **业务接入**：`build_run_args` 已统一填充 `first_frame_image` / `last_frame_image` 具名键；openai / volcengine 的 payload 不读取这些字段，行为零变化。
 - **能力声明**：视频能力分派在 `video_capabilities.py` 中有独立 `ljp_api` 分支；图片能力与 openai 共用（复用其实现）。
+- **远端模型列表**：`GET /api/v1/llm/providers/{provider_id}/remote-models` 代理上游 OpenAI 兼容 `GET /models`，供「添加模型」表单拉取可选模型名（拉取失败时仍可手输）。无内置默认 base_url 的供应商未配置 base_url 时返回 400。
 - **测试**：`backend/tests/core/integrations/test_ljp_api_video_adapters.py`（MockTransport 单测），注册与业务层断言分布在 `test_task_registry.py`、`test_llm_api_responses.py`、`test_generated_video_service.py`。
 
 ## 测试提示

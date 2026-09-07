@@ -22,6 +22,8 @@ from app.schemas.llm import (
     ModelUpdate,
     ProviderCreate,
     ProviderRead,
+    ProviderRemoteModelRead,
+    ProviderRemoteModelsRead,
     ProviderSupportedRead,
     VideoGenerationOptionsRead,
     ProviderUpdate,
@@ -43,6 +45,7 @@ from app.services.common import (
     patch_model,
     require_entity,
 )
+from app.services.llm.provider_resolver import resolve_provider_config_from_provider
 
 
 async def list_providers_paginated(
@@ -133,6 +136,82 @@ async def delete_provider(
 ) -> None:
     """删除供应商。"""
     await delete_if_exists(db, Provider, provider_id)
+
+
+async def list_provider_remote_models(
+    db: AsyncSession,
+    *,
+    provider_id: str,
+    timeout_s: float = 15.0,
+) -> ProviderRemoteModelsRead:
+    """代理拉取供应商上游的 OpenAI 兼容模型列表（GET {base_url}/models）。
+
+    用于「添加模型」表单：按已配置的 Provider（base_url + api_key）拉取上游可用模型，
+    避免用户凭记忆手填模型名。
+    """
+    provider = await get_or_404(db, Provider, provider_id, detail=entity_not_found("Provider"))
+    resolved = resolve_provider_config_from_provider(provider=provider, category=ModelCategoryKey.text)
+    # resolved.base_url 已含内置默认兜底（如 openai 官方端点）；
+    # 无默认端点的纯网关型供应商（如 ljp_api）未配置 base_url 时在此显式报错。
+    base_url = (resolved.base_url or "").strip().rstrip("/")
+    if not base_url:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"Provider base_url is empty for provider_id={provider_id}",
+        )
+
+    try:
+        import httpx
+    except ImportError as e:  # pragma: no cover
+        raise RuntimeError("httpx is required to fetch remote model lists") from e
+
+    try:
+        async with httpx.AsyncClient(timeout=timeout_s) as client:
+            r = await client.get(
+                f"{base_url}/models",
+                headers={"Authorization": f"Bearer {resolved.api_key}"},
+            )
+            r.raise_for_status()
+            payload = r.json()
+    except httpx.HTTPStatusError as e:
+        raise HTTPException(
+            status_code=status.HTTP_502_BAD_GATEWAY,
+            detail=f"Remote provider returned HTTP {e.response.status_code} for /models",
+        ) from e
+    except Exception as e:  # noqa: BLE001
+        raise HTTPException(
+            status_code=status.HTTP_502_BAD_GATEWAY,
+            detail=f"Failed to fetch remote model list: {e}",
+        ) from e
+
+    raw_items = payload.get("data") if isinstance(payload, dict) else None
+    if not isinstance(raw_items, list):
+        # 部分网关直接返回数组而非 {data: [...]}。
+        raw_items = payload if isinstance(payload, list) else []
+
+    items: list[ProviderRemoteModelRead] = []
+    seen: set[str] = set()
+    for entry in raw_items:
+        model_id = ""
+        if isinstance(entry, dict):
+            model_id = str(entry.get("id") or "").strip()
+            owned_by = entry.get("owned_by")
+        elif isinstance(entry, str):
+            model_id = entry.strip()
+            owned_by = None
+        else:
+            continue
+        if not model_id or model_id in seen:
+            continue
+        seen.add(model_id)
+        items.append(
+            ProviderRemoteModelRead(
+                id=model_id,
+                owned_by=str(owned_by) if owned_by is not None else None,
+            )
+        )
+    items.sort(key=lambda x: x.id)
+    return ProviderRemoteModelsRead(provider_id=provider_id, items=items)
 
 
 async def list_models_paginated(

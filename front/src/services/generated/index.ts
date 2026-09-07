@@ -53,6 +53,7 @@ export type { ApiResponse_ProjectStyleOptionsRead_ } from './models/ApiResponse_
 export type { ApiResponse_PromptTemplateRead_ } from './models/ApiResponse_PromptTemplateRead_';
 export type { ApiResponse_PropInfoAnalysisResult_ } from './models/ApiResponse_PropInfoAnalysisResult_';
 export type { ApiResponse_ProviderRead_ } from './models/ApiResponse_ProviderRead_';
+export type { ApiResponse_ProviderRemoteModelsRead_ } from './models/ApiResponse_ProviderRemoteModelsRead_';
 export type { ApiResponse_RenderedPromptResponse_ } from './models/ApiResponse_RenderedPromptResponse_';
 export type { ApiResponse_RenderedShotFramePromptRead_ } from './models/ApiResponse_RenderedShotFramePromptRead_';
 export type { ApiResponse_SceneInfoAnalysisResult_ } from './models/ApiResponse_SceneInfoAnalysisResult_';
@@ -159,6 +160,8 @@ export type { PropInfoAnalysisRequest } from './models/PropInfoAnalysisRequest';
 export type { PropInfoAnalysisResult } from './models/PropInfoAnalysisResult';
 export type { ProviderCreate } from './models/ProviderCreate';
 export type { ProviderRead } from './models/ProviderRead';
+export type { ProviderRemoteModelRead } from './models/ProviderRemoteModelRead';
+export type { ProviderRemoteModelsRead } from './models/ProviderRemoteModelsRead';
 export type { ProviderStatus } from './models/ProviderStatus';
 export type { ProviderSupportedRead } from './models/ProviderSupportedRead';
 export type { ProviderUpdate } from './models/ProviderUpdate';

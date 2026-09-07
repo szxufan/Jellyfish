@@ -10,6 +10,7 @@ import type { ApiResponse_NoneType_ } from '../models/ApiResponse_NoneType_';
 import type { ApiResponse_PaginatedData_ModelRead__ } from '../models/ApiResponse_PaginatedData_ModelRead__';
 import type { ApiResponse_PaginatedData_ProviderRead__ } from '../models/ApiResponse_PaginatedData_ProviderRead__';
 import type { ApiResponse_ProviderRead_ } from '../models/ApiResponse_ProviderRead_';
+import type { ApiResponse_ProviderRemoteModelsRead_ } from '../models/ApiResponse_ProviderRemoteModelsRead_';
 import type { ApiResponse_VideoGenerationOptionsRead_ } from '../models/ApiResponse_VideoGenerationOptionsRead_';
 import type { ModelCategoryKey } from '../models/ModelCategoryKey';
 import type { ModelCreate } from '../models/ModelCreate';
@@ -133,6 +134,27 @@ export class LlmService {
         return __request(OpenAPI, {
             method: 'GET',
             url: '/api/v1/llm/video-generation-options',
+        });
+    }
+    /**
+     * 代理拉取供应商上游模型列表（OpenAI 兼容 /models）
+     * @returns ApiResponse_ProviderRemoteModelsRead_ Successful Response
+     * @throws ApiError
+     */
+    public static listProviderRemoteModelsApiV1LlmProvidersProviderIdRemoteModelsGet({
+        providerId,
+    }: {
+        providerId: string,
+    }): CancelablePromise<ApiResponse_ProviderRemoteModelsRead_> {
+        return __request(OpenAPI, {
+            method: 'GET',
+            url: '/api/v1/llm/providers/{provider_id}/remote-models',
+            path: {
+                'provider_id': providerId,
+            },
+            errors: {
+                422: `Validation Error`,
+            },
         });
     }
     /**

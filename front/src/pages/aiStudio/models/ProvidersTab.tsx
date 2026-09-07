@@ -56,6 +56,8 @@ export default function ProvidersTab() {
   const [treeCollapsed, setTreeCollapsed] = useState(false)
   const [providerModalOpen, setProviderModalOpen] = useState(false)
   const [providerEditing, setProviderEditing] = useState<ProviderRead | null>(null)
+  // 表单当前选中的供应商展示名：驱动 requires_api_secret 动态显隐。
+  const [selectedSpecName, setSelectedSpecName] = useState<string | null>(null)
   const [testConnecting, setTestConnecting] = useState(false)
   const [form] = Form.useForm()
   const { lg } = Grid.useBreakpoint()
@@ -130,6 +132,18 @@ export default function ProvidersTab() {
       form.setFieldsValue({ base_url: def })
     }
   }
+
+  // 编辑历史供应商时，即使名称不在清单内也需解析 spec；找不到则按"不需要 Secret"处理。
+  const currentSpec = useMemo(() => {
+    const displayName = providerEditing?.name?.trim() || selectedSpecName
+    if (!displayName) return null
+    return (
+      supportedSpecs.find(
+        (s) => s.display_name === displayName || (s.aliases?.length && s.aliases.includes(displayName)),
+      ) ?? null
+    )
+  }, [supportedSpecs, providerEditing, selectedSpecName])
+  const showApiSecret = currentSpec?.requires_api_secret ?? false
 
   const providerList = useMemo(() => {
     let list = providers
@@ -244,6 +258,7 @@ export default function ProvidersTab() {
     } else {
       form.resetFields()
     }
+    setSelectedSpecName(null)
     setProviderModalOpen(true)
   }
 
@@ -257,14 +272,20 @@ export default function ProvidersTab() {
       render: (url: string) => <Tooltip title={url}>{maskUrl(url)}</Tooltip>,
     },
     {
-      title: 'AK/SK',
+      title: '密钥',
       key: 'aksk',
-      render: () => (
-        <span>
-          <WarningOutlined className="text-amber-500 mr-1" />
-          ******** / ********
-        </span>
-      ),
+      render: (_, record) => {
+        // 按 supported 清单判断该供应商是否使用双密钥（AK/SK），单密钥供应商只展示 AK。
+        const spec = supportedSpecs.find(
+          (s) => s.display_name === record.name || (s.aliases?.length && s.aliases.includes(record.name)),
+        )
+        return (
+          <span>
+            <WarningOutlined className="text-amber-500 mr-1" />
+            {spec?.requires_api_secret ? '******** / ********' : '********'}
+          </span>
+        )
+      },
     },
     {
       title: '描述',
@@ -527,7 +548,14 @@ export default function ProvidersTab() {
                   <div className="text-gray-500 text-sm mb-1 truncate" title={p.base_url}>
                     Base URL：{maskUrl(p.base_url)}
                   </div>
-                  <div className="text-gray-500 text-sm mb-1">AK/SK：******** / ********</div>
+                  <div className="text-gray-500 text-sm mb-1">
+                    密钥：
+                    {supportedSpecs.find(
+                      (s) => s.display_name === p.name || (s.aliases?.length && s.aliases.includes(p.name)),
+                    )?.requires_api_secret
+                      ? '******** / ********'
+                      : '********'}
+                  </div>
                   <div className="text-gray-500 text-sm line-clamp-2 mb-2">{p.description || '—'}</div>
                   <Tag color={PROVIDER_STATUS_MAP[p.status ?? 'active']?.color}>
                     {PROVIDER_STATUS_MAP[p.status ?? 'active']?.text}
@@ -668,7 +696,11 @@ export default function ProvidersTab() {
               placeholder={supportedLoading ? '加载供应商清单…' : '选择供应商'}
               options={providerNameOptions}
               notFoundContent={supportedLoading ? '加载中…' : '暂无数据'}
-              onChange={(v) => applyDefaultBaseUrlForDisplayName(String(v))}
+              onChange={(v) => {
+                const name = String(v)
+                setSelectedSpecName(name)
+                applyDefaultBaseUrlForDisplayName(name)
+              }}
             />
           </Form.Item>
           <Form.Item
@@ -687,9 +719,11 @@ export default function ProvidersTab() {
           <Form.Item name="api_key" label="API Key" help={providerEditing ? '留空则不修改' : '请勿分享密钥'}>
             <Input.Password placeholder="AK" />
           </Form.Item>
-          <Form.Item name="api_secret" label="API Secret" help={providerEditing ? '留空则不修改' : undefined}>
-            <Input.Password placeholder="SK" />
-          </Form.Item>
+          {showApiSecret && (
+            <Form.Item name="api_secret" label="API Secret" help={providerEditing ? '留空则不修改' : undefined}>
+              <Input.Password placeholder="SK" />
+            </Form.Item>
+          )}
           <Form.Item name="description" label="描述">
             <Input.TextArea rows={2} placeholder="支持 GPT 系列模型" />
           </Form.Item>

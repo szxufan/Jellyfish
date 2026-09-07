@@ -172,7 +172,6 @@ export interface ModelSettings {
   default_text_model_id: string | null
   default_image_model_id: string | null
   default_video_model_id: string | null
-  api_timeout: number
   log_level: 'debug' | 'info' | 'warn' | 'error'
 }
 
@@ -988,6 +987,5 @@ export const defaultModelSettings: ModelSettings = {
   default_text_model_id: 'model1',
   default_image_model_id: 'model4',
   default_video_model_id: 'model5',
-  api_timeout: 30,
   log_level: 'info',
 }

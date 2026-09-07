@@ -64,8 +64,12 @@ export default function ModelsTab() {
   const [modelModalOpen, setModelModalOpen] = useState(false)
   const [modelEditing, setModelEditing] = useState<ModelRead | null>(null)
   const [providerOptionsLoading, setProviderOptionsLoading] = useState(true)
+  // 远端模型列表状态：按表单选中的供应商拉取上游 /models。
+  const [remoteModels, setRemoteModels] = useState<string[]>([])
+  const [remoteModelsLoading, setRemoteModelsLoading] = useState(false)
   const [form] = Form.useForm()
   const selectedFormCategory = Form.useWatch<ModelCategoryKey | undefined>('category', form)
+  const selectedFormProviderId = Form.useWatch<string | undefined>('provider_id', form)
   const { lg } = Grid.useBreakpoint()
   const isLargeScreen = lg ?? false
 
@@ -165,6 +169,38 @@ export default function ModelsTab() {
     const categoryLabel = categoryLabelMap[selectedFormCategory]
     return `当前模型绑定供应商「${provider.name}」不支持「${categoryLabel}」类别，保存前建议切换到支持该类别的供应商。`
   }, [editingUnsupportedProviderOption, providers, selectedFormCategory])
+
+  // 供应商变化后拉取其上游模型清单，作为「模型名称」下拉选项。
+  useEffect(() => {
+    if (!modelModalOpen || !selectedFormProviderId) {
+      setRemoteModels([])
+      return
+    }
+    let cancelled = false
+    setRemoteModelsLoading(true)
+    LlmService.listProviderRemoteModelsApiV1LlmProvidersProviderIdRemoteModelsGet({
+      providerId: selectedFormProviderId,
+    })
+      .then((res) => {
+        if (!cancelled) setRemoteModels((res.data?.items ?? []).map((item) => item.id))
+      })
+      .catch(() => {
+        // 拉取失败（网络/鉴权/网关不支持）不阻塞表单：名称仍可手输。
+        if (!cancelled) setRemoteModels([])
+      })
+      .finally(() => {
+        if (!cancelled) setRemoteModelsLoading(false)
+      })
+    return () => {
+      cancelled = true
+    }
+  }, [modelModalOpen, selectedFormProviderId])
+
+  // 供应商切换后清空已选模型名，避免残留不属于新供应商的名称。
+  useEffect(() => {
+    if (modelModalOpen) form.setFieldsValue({ name: undefined })
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [selectedFormProviderId])
 
   useEffect(() => {
     if (!selectedFormCategory) return
@@ -694,9 +730,6 @@ export default function ModelsTab() {
         destroyOnClose
       >
         <Form form={form} layout="vertical" className="pt-2">
-          <Form.Item name="name" label="名称" rules={[{ required: true }]}>
-            <Input placeholder="例如：GPT-4" />
-          </Form.Item>
           <Form.Item name="category" label="类别" rules={[{ required: true }]}>
             <Select options={MODEL_CATEGORIES.map((c) => ({ label: c.label, value: c.key }))} />
           </Form.Item>
@@ -720,6 +753,24 @@ export default function ModelsTab() {
                     ? '暂无支持该类别的供应商'
                     : '暂无供应商'
               }
+            />
+          </Form.Item>
+          <Form.Item
+            name="name"
+            label="模型名称"
+            rules={[{ required: true, message: '请选择或输入模型名称' }]}
+            extra={
+              remoteModels.length > 0
+                ? `已从供应商拉取 ${remoteModels.length} 个可用模型`
+                : '无法拉取远端列表时可直接输入模型名称'
+            }
+          >
+            <Select
+              showSearch
+              loading={remoteModelsLoading}
+              placeholder={selectedFormProviderId ? '选择或输入上游模型名称' : '请先选择供应商'}
+              options={remoteModels.map((id) => ({ label: id, value: id }))}
+              notFoundContent={remoteModelsLoading ? '拉取模型列表中…' : '未拉取到远端模型，可直接输入名称'}
             />
           </Form.Item>
           {unsupportedProviderWarning && (

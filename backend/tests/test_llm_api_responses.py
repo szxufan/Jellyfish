@@ -5,6 +5,7 @@ from __future__ import annotations
 from collections.abc import AsyncGenerator, Iterator
 from datetime import UTC, datetime
 
+import httpx
 import pytest
 from fastapi.testclient import TestClient
 
@@ -264,3 +265,109 @@ def test_get_image_generation_options_returns_ratio_size_profiles(client: TestCl
     assert body["data"]["default_resolution_profile"] == "standard"
     assert body["data"]["ratio_size_profiles"]["16:9"]["standard"] == "2848x1600"
     assert body["data"]["ratio_size_profiles"]["16:9"]["high"] == "4096x2304"
+
+
+def _patch_remote_models_httpx(
+    monkeypatch: pytest.MonkeyPatch,
+    handler: object,
+) -> None:
+    """让 manage 层 `import httpx` 后的 AsyncClient 走 MockTransport。"""
+    import httpx
+
+    real_client = httpx.AsyncClient
+
+    def factory(**kwargs: object) -> httpx.AsyncClient:
+        timeout = kwargs.get("timeout", 15.0)
+        return real_client(transport=httpx.MockTransport(handler), timeout=timeout)  # type: ignore[arg-type]
+
+    monkeypatch.setattr(httpx, "AsyncClient", factory)
+
+
+def test_list_provider_remote_models_returns_items(
+    client: TestClient, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    def handler(request: httpx.Request) -> httpx.Response:
+        assert request.method == "GET"
+        assert str(request.url).rstrip("/").endswith("/models")
+        assert request.headers["Authorization"] == "Bearer sk-test"
+        return httpx.Response(
+            200,
+            json={"data": [{"id": "gpt-4o", "owned_by": "openai"}, {"id": "viduq2"}]},
+        )
+
+    _patch_remote_models_httpx(monkeypatch, handler)
+
+    db = _FakeLlmDB()
+    db.add(Provider(id="p1", name="OpenAI", base_url="https://api.openai.com/v1", api_key="sk-test"))
+    llm_app.dependency_overrides[get_db] = _override_db(db)
+    try:
+        response = client.get("/api/v1/llm/providers/p1/remote-models")
+    finally:
+        llm_app.dependency_overrides.clear()
+
+    assert response.status_code == 200
+    body = response.json()
+    assert body["code"] == 200
+    assert body["data"]["provider_id"] == "p1"
+    assert [item["id"] for item in body["data"]["items"]] == ["gpt-4o", "viduq2"]
+    assert body["data"]["items"][0]["owned_by"] == "openai"
+    assert body["data"]["items"][1]["owned_by"] is None
+
+
+def test_list_provider_remote_models_dedupes_and_sorts(
+    client: TestClient, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    def handler(request: httpx.Request) -> httpx.Response:
+        return httpx.Response(
+            200,
+            json={"data": [{"id": "b-model"}, {"id": "a-model"}, {"id": "b-model"}]},
+        )
+
+    _patch_remote_models_httpx(monkeypatch, handler)
+
+    db = _FakeLlmDB()
+    db.add(Provider(id="p1", name="OpenAI", base_url="https://api.openai.com/v1", api_key="sk-test"))
+    llm_app.dependency_overrides[get_db] = _override_db(db)
+    try:
+        response = client.get("/api/v1/llm/providers/p1/remote-models")
+    finally:
+        llm_app.dependency_overrides.clear()
+
+    body = response.json()
+    assert [item["id"] for item in body["data"]["items"]] == ["a-model", "b-model"]
+
+
+def test_list_provider_remote_models_maps_http_error(
+    client: TestClient, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    def handler(request: httpx.Request) -> httpx.Response:
+        return httpx.Response(401, json={"error": {"message": "invalid api key"}})
+
+    _patch_remote_models_httpx(monkeypatch, handler)
+
+    db = _FakeLlmDB()
+    db.add(Provider(id="p1", name="OpenAI", base_url="https://api.openai.com/v1", api_key="sk-bad"))
+    llm_app.dependency_overrides[get_db] = _override_db(db)
+    try:
+        response = client.get("/api/v1/llm/providers/p1/remote-models")
+    finally:
+        llm_app.dependency_overrides.clear()
+
+    assert response.status_code == 502
+    body = response.json()
+    assert body["code"] == 502
+    assert "HTTP 401" in body["message"]
+
+
+def test_list_provider_remote_models_requires_base_url(client: TestClient) -> None:
+    # 连接派（ljp_api）为纯网关型，无内置默认 base_url，未配置时应显式 400。
+    db = _FakeLlmDB()
+    db.add(Provider(id="p1", name="连接派", base_url="", api_key="sk-test"))
+    llm_app.dependency_overrides[get_db] = _override_db(db)
+    try:
+        response = client.get("/api/v1/llm/providers/p1/remote-models")
+    finally:
+        llm_app.dependency_overrides.clear()
+
+    assert response.status_code == 400
+    assert "base_url is empty" in response.json()["message"]

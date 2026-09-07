@@ -72,6 +72,20 @@ class ProviderSupportedRead(BaseModel):
     is_experimental: bool = Field(False, description="是否实验性供应商")
 
 
+class ProviderRemoteModelRead(BaseModel):
+    """供应商远端模型清单条目（来自上游 /models 接口）。"""
+
+    id: str = Field(..., description="上游模型名称（如 gpt-4o / viduq2）")
+    owned_by: str | None = Field(None, description="上游归属方（OpenAI 兼容字段，可能缺失）")
+
+
+class ProviderRemoteModelsRead(BaseModel):
+    """供应商远端模型清单（代理上游 OpenAI 兼容 GET /v1/models）。"""
+
+    provider_id: str = Field(..., description="供应商 ID")
+    items: list[ProviderRemoteModelRead] = Field(default_factory=list, description="模型列表")
+
+
 class VideoGenerationOptionsRead(BaseModel):
     """当前默认视频模型对应的生成参数选项。"""
 
@@ -137,7 +151,6 @@ class ModelSettingsBase(BaseModel):
     default_text_model_id: str | None = Field(None, description="默认文本模型 ID")
     default_image_model_id: str | None = Field(None, description="默认图片模型 ID")
     default_video_model_id: str | None = Field(None, description="默认视频模型 ID")
-    api_timeout: int = Field(30, description="API 超时（秒）")
     log_level: LogLevel = Field(LogLevel.info, description="日志级别")
 
 

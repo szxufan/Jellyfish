@@ -153,7 +153,6 @@ class ModelSettings(Base):
         nullable=True,
         comment="默认视频模型 ID",
     )
-    api_timeout: Mapped[int] = mapped_column(Integer, nullable=False, default=30, comment="API 超时（秒）")
     log_level: Mapped[LogLevel] = mapped_column(String(16), nullable=False, default=LogLevel.info, comment="日志级别")
 
     default_text_model: Mapped["Model | None"] = relationship(foreign_keys=[default_text_model_id])

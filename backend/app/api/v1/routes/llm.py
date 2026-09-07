@@ -17,6 +17,7 @@ from app.schemas.llm import (
     ModelUpdate,
     ProviderCreate,
     ProviderRead,
+    ProviderRemoteModelsRead,
     ProviderSupportedRead,
     VideoGenerationOptionsRead,
     ProviderUpdate,
@@ -31,6 +32,7 @@ from app.services.llm.manage import (
     get_provider as get_provider_service,
     get_image_generation_options as get_image_generation_options_service,
     get_video_generation_options as get_video_generation_options_service,
+    list_provider_remote_models as list_provider_remote_models_service,
     list_supported_providers as list_supported_providers_service,
     list_models_paginated,
     list_providers_paginated,
@@ -123,6 +125,19 @@ async def create_provider(
 ) -> ApiResponse[ProviderRead]:
     provider = await create_provider_service(db, body=body)
     return created_response(ProviderRead.model_validate(provider))
+
+
+@router.get(
+    "/providers/{provider_id}/remote-models",
+    response_model=ApiResponse[ProviderRemoteModelsRead],
+    summary="代理拉取供应商上游模型列表（OpenAI 兼容 /models）",
+)
+async def list_provider_remote_models(
+    provider_id: str,
+    db: AsyncSession = Depends(get_db),
+) -> ApiResponse[ProviderRemoteModelsRead]:
+    data = await list_provider_remote_models_service(db, provider_id=provider_id)
+    return success_response(data)
 
 
 @router.get(
