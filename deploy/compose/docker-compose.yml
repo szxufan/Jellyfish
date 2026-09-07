@@ -68,8 +68,8 @@ services:
       S3_ACCESS_KEY_ID: ${RUSTFS_ACCESS_KEY}
       S3_SECRET_ACCESS_KEY: ${RUSTFS_SECRET_KEY}
       S3_BUCKET_NAME: ${S3_BUCKET_NAME}
-      # CORS
-      CORS_ORIGINS: http://localhost:7788,http://127.0.0.1:7788
+      # CORS：放开为任意 Origin（前端可能以 https/自定端口访问）；如需收紧可改为具体来源列表
+      CORS_ORIGINS: "*"
       # 可选
       OPENAI_API_KEY: ${OPENAI_API_KEY-}
     depends_on:
@@ -118,8 +118,8 @@ services:
       S3_ACCESS_KEY_ID: ${RUSTFS_ACCESS_KEY}
       S3_SECRET_ACCESS_KEY: ${RUSTFS_SECRET_KEY}
       S3_BUCKET_NAME: ${S3_BUCKET_NAME}
-      # CORS
-      CORS_ORIGINS: http://localhost:7788,http://127.0.0.1:7788
+      # CORS：放开为任意 Origin（前端可能以 https/自定端口访问）；如需收紧可改为具体来源列表
+      CORS_ORIGINS: "*"
       # 可选
       OPENAI_API_KEY: ${OPENAI_API_KEY-}
     ports:
@@ -152,7 +152,8 @@ services:
       S3_ACCESS_KEY_ID: ${RUSTFS_ACCESS_KEY}
       S3_SECRET_ACCESS_KEY: ${RUSTFS_SECRET_KEY}
       S3_BUCKET_NAME: ${S3_BUCKET_NAME}
-      CORS_ORIGINS: http://localhost:7788,http://127.0.0.1:7788
+      # CORS：放开为任意 Origin（与 backend 保持一致）
+      CORS_ORIGINS: "*"
       OPENAI_API_KEY: ${OPENAI_API_KEY-}
     depends_on:
       mysql:

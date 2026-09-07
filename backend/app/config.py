@@ -36,14 +36,21 @@ class Settings(BaseSettings):
     celery_broker_url: str | None = None
 
     # CORS：环境变量中建议使用逗号分隔（更贴近 docker-compose 用法）
-    # 也兼容 JSON 数组：'["http://a","http://b"]'
-    cors_origins: str = "http://localhost:7788,http://127.0.0.1:7788"
+    # 也兼容 JSON 数组：'["http://a","http://b"]'；值为 "*" 时放行任意 Origin
+    cors_origins: str = "*"
 
     @property
     def cors_origins_list(self) -> list[str]:
+        """解析 CORS 白名单配置，返回 Origin 列表。
+
+        支持："*"（任意 Origin）、逗号分隔来源、JSON 数组；空值返回空列表。
+        """
         s = (self.cors_origins or "").strip()
         if not s:
             return []
+        # "*" 通配：交由 CORSMiddleware 以 allow_origins=["*"] 处理
+        if s == "*":
+            return ["*"]
         if s.startswith("["):
             loaded = json.loads(s)
             if isinstance(loaded, list):
